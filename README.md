@@ -1,4 +1,4 @@
-# 🏥 SterileGuard MR
+# 🏥 Xterilize
 
 **Real-time Contamination Detection and Warning System in Surgical Settings Using Mixed Reality Sensing**
 
