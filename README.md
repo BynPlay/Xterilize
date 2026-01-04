@@ -1,218 +1,153 @@
-# 🏥 Xterilize
+# Xterilize
 
-**Real-time Surgical Contamination Detection System Using Mixed Reality Body Tracking**
+Real-time surgical contamination detection using MR body tracking.
 
-*MR 바디 트래킹 기반 수술실 오염 행동 실시간 감지 시스템*
+MR 바디 트래킹 기반 수술실 오염 감지 시스템
 
-A VR training system that leverages 84-joint body tracking to detect contamination behaviors and deliver non-intrusive multi-modal warnings, helping medical staff maintain sterile protocols.
-
-[![Demo](https://img.shields.io/badge/▶_Demo-YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/@aaappp5789/shorts)
-![Unity](https://img.shields.io/badge/Unity-2022.3_LTS-000000?style=for-the-badge&logo=unity)
-![Meta Quest](https://img.shields.io/badge/Meta_Quest_3-0467DF?style=for-the-badge&logo=meta)
+[![Demo](https://img.shields.io/badge/Demo-YouTube-red)](https://www.youtube.com/@aaappp5789/shorts)
 
 ---
 
-## Problem
+## Overview
 
-Operating room contamination from unconscious behaviors—hands dropping below waist, touching face, brushing non-sterile surfaces—poses serious risks to patient safety. Traditional training methods lack real-time feedback mechanisms.
+Minor contamination behaviors in the operating room—hands dropping below the waist, unconsciously touching the face, brushing against non-sterile surfaces—can compromise patient safety. These actions often go unnoticed during high-focus surgical procedures.
 
-*수술실에서 무의식적 오염 행동(손 위치 하강, 얼굴 접촉, 비멸균 표면 접촉)은 환자 안전에 심각한 위험을 초래합니다. 기존 훈련 방식은 실시간 피드백이 부재합니다.*
+수술 중 무의식적 오염 행동(손 위치 하강, 얼굴 접촉, 비멸균 표면 접촉)은 환자 안전을 위협하지만, 고도의 집중이 필요한 수술 중에는 인지하기 어렵습니다.
 
----
+Xterilize addresses this by leveraging Meta Quest's 84-joint body tracking to monitor surgeon movements in real-time. When contamination risk is detected, the system delivers immediate feedback through peripheral vision and spatial audio—designed to alert without disrupting surgical focus.
 
-## Solution
+84개 관절 추적으로 수술자의 움직임을 실시간 모니터링하고, 주변 시야와 공간 음향을 통해 수술 집중을 방해하지 않으면서 즉각적인 경고를 제공합니다.
 
-Xterilize uses Meta Movement SDK's 84-joint body tracking to monitor surgeon movements in real-time, detecting three categories of contamination risk and providing immediate feedback without disrupting surgical focus.
+**Three contamination categories:**
 
-*84개 관절 추적으로 세 가지 오염 위험을 실시간 모니터링하고, 수술 집중을 방해하지 않는 즉각적 피드백을 제공합니다.*
-
----
-
-## Design Principles
-
-*설계 원칙*
-
-| Principle | Implementation |
+| Category | Examples |
 |:---|:---|
-| **Non-intrusive feedback** | Warnings in 15-20° peripheral vision only; central FOV preserved |
-| **Progressive escalation** | 3-tier alert system (proximity → caution → danger) prevents alarm fatigue |
-| **Context-aware detection** | Velocity vector analysis distinguishes intentional movement from accidental contact |
-| **Personalization** | Auto-calibrating thresholds based on user body metrics and behavior patterns |
+| **Habitual behavior** | Hands below waist, face touching |
+| **Non-sterile contact** | Floor, cables, door handles, equipment exterior |
+| **Movement-based** | Unintentional contact during posture changes |
 
 ---
 
-## System Overview
+## Detection
 
-*시스템 구조*
+### Habitual Behavior
 
-```
-                            ┌─────────────────────┐
-                            │   Meta Quest 3/Pro  │
-                            │                     │
-                            │  • Body Tracking    │
-                            │  • Hand Tracking    │
-                            │  • Spatial Mapping  │
-                            └──────────┬──────────┘
-                                       │
-                    ┌──────────────────┼──────────────────┐
-                    ▼                  ▼                  ▼
-          ┌─────────────────┐ ┌───────────────┐ ┌─────────────────┐
-          │    Habitual     │ │   Non-sterile │ │   Movement      │
-          │    Behavior     │ │    Contact    │ │    Context      │
-          └────────┬────────┘ └───────┬───────┘ └────────┬────────┘
-                   │                  │                  │
-                   └──────────────────┼──────────────────┘
-                                      ▼
-                            ┌─────────────────────┐
-                            │   Feedback Engine   │
-                            │                     │
-                            │  Visual │ Spatial   │
-                            │   HUD   │  Audio    │
-                            └──────────┬──────────┘
-                                       │
-                                       ▼
-                            ┌─────────────────────┐
-                            │    Data Logger      │
-                            │    (CSV Export)     │
-                            └─────────────────────┘
-```
+Meta Movement SDK의 Body Tracking 모듈로 84개 관절 위치·회전 데이터를 실시간 추적합니다.
 
----
+**Hand position drop**
+- Waist height calibrated from pelvis joint (`XR_FULL_BODY_JOINT_HIPS_META`) at device wear time
+- Triggered when `hand_y < hip_y - δ` (δ ≈ 3-5cm) persists for 500ms+
 
-## Detection Logic
+**Face contact**
+- Head collider (`XR_FULL_BODY_JOINT_HEAD_META`) defines face region
+- Calculates minimum distance between fingertip joints and face surface
+- Triggered when `d_min < 1.0cm`
+- Mask/goggle areas apply penalty weights for heightened sensitivity
 
-*탐지 로직*
+### Non-sterile Contact
 
-### Habitual Behavior — *습관적 행동*
+비멸균 영역(바닥, 장비 외부, 케이블, 문 손잡이 등)은 Unity 씬 내에서 Non-sterile Label Map으로 사전 태깅됩니다.
 
-Detects unconscious movements that break sterile protocol.
+**Distance-based alert escalation:**
 
-| Behavior | Detection Rule | Threshold |
-|:---|:---|:---|
-| Hand below waist | `Hand_y < Hip_y - δ` | δ = 3-5cm, duration > 500ms |
-| Face contact | `distance(fingertip, face_collider)` | < 1.0cm |
-
-> Mask and goggle regions apply penalty weights for heightened sensitivity.
-> 
-> *마스크/고글 영역은 가중치를 적용하여 민감도를 높입니다.*
-
-### Non-sterile Contact — *비멸균 접촉*
-
-Pre-labeled surfaces (floor, cables, door handles) trigger distance-based alerts.
-
-| Distance | Alert Level | Response |
+| Distance | Level | Response |
 |:---:|:---:|:---|
-| ≤ 5cm | ⚠️ Proximity | Yellow emission glow |
-| ≤ 1cm | 🔶 Caution | Red emission + audio cue |
-| ≈ 0cm | 🚨 Contact | Full warning + event logged |
+| d ≤ 5cm | Proximity | Yellow emission |
+| d ≤ 1cm | Caution | Red emission + audio |
+| d ≈ 0 + v > 0.05m/s | Contact | Full warning + logged |
 
-> Velocity check (`v > 0.05 m/s`) filters out false positives from static postures.
->
-> *속도 벡터 검증으로 정적 자세에서의 오탐을 방지합니다.*
+Distance calculated per frame using `Vector3.Distance()` between hand/tool transforms and tagged surfaces. Velocity vector (`v = Δposition / Time.deltaTime`) distinguishes dynamic contact from static proximity, reducing false positives.
 
-### Movement Context — *이동 상황*
+### Movement-based Detection
 
-FSM-driven surgical scenarios simulate high-risk moments.
+FSM 패턴으로 오염 빈발 수술 시나리오를 구조화합니다.
 
 ```
-Idle → Instruction → Action → Evaluation → Idle
+Idle → Instruction → Action → Evaluation
 ```
 
-NPC surgeons issue voice commands ("Pass the scalpel") while user navigates contamination-prone interactions.
+- Unity Animator Controller 기반 NPC 집도의가 상태 전환 및 제스처 애니메이션 수행
+- Unity Audio Source로 "수술 도구 전달", "장비 위치 조정" 등 음성 지시 출력
+- 실제 수술실 협업 상황을 재현하여 오염 발생 가능성이 높은 동작 유도
 
-*NPC 집도의가 음성 지시를 내리며, 사용자는 오염 위험이 높은 상호작용을 수행합니다.*
+**Hand interaction:**
+- OVRHand/OVRSkeleton으로 캐릭터 바디 리그에 실시간 본 매핑
+- OVRGrabber/OVRGrabbable 기반 그랩 시스템으로 수술 도구 파지
+- Fixed Joint로 자연스러운 홀딩 자세, Configurable Joint로 도구 무게감 및 관성 시뮬레이션
 
 ---
 
-## Feedback System
+## Feedback
 
-*피드백 시스템*
+수술자의 시야와 인지 부하를 최소화하면서 즉각적 피드백을 제공하는 다중 모달 인터페이스입니다.
 
-### Visual Design
+### Visual
 
-| Element | Behavior |
+| Element | Implementation |
 |:---|:---|
-| **Peripheral HUD** | Red vignette at screen edges; auto-fades in 1s |
-| **Object highlight** | Shader Graph emission ramp (yellow → red) |
-| **Material restore** | Lerp interpolation back to original state |
+| Peripheral warning | Red vignette at 15-20° FOV edges, central vision unobstructed |
+| Object highlight | Shader Graph emission ramp (yellow → red) on non-sterile objects |
+| Auto-dismiss | 1-second fade-out via Lerp interpolation |
 
-> Central vision remains unobstructed to preserve surgical focus.
->
-> *중심 시야는 방해하지 않아 수술 집중을 유지합니다.*
+습관적 행동 감지 시 시야 경계부가 붉은색으로 강조되며, 비멸균 물체 접근 시 해당 오브젝트의 머티리얼 Emission 값이 실시간 변경됩니다.
 
-### Spatial Audio
+### Audio
 
-| Feature | Purpose |
+| Feature | Implementation |
 |:---|:---|
-| **Directional panning** | Indicates contamination source location (L/R) |
-| **Distance attenuation** | Closer = louder; provides implicit proximity sense |
-| **Bass tone on danger** | Low-frequency rumble triggers heightened alertness |
+| Directional panning | L/R stereo based on contamination source position |
+| Distance attenuation | Volume scales with proximity to contamination point |
+| Danger tone | Low-frequency bass added at danger level |
+
+Unity Audio Source의 3D Spatial Audio로 오염 발생 위치 기준 공간 음향을 렌더링합니다.
 
 ### Cognitive Load Management
 
-- **Debounce**: Same event suppressed for 3 seconds
-- **Adaptive thresholds**: Calibrates to user body size, experience level, surgery type
+- Duplicate suppression: Same event ignored for 3 seconds
+- Adaptive thresholds: Auto-calibrates to user body size, habits, surgery type
+
+경고 과다 반복으로 인한 집중력 저하를 방지합니다.
 
 ---
 
-## Tech Stack
+## Data Logging
 
-| Layer | Technologies |
-|:---|:---|
-| **Platform** | Meta Quest 3 / Quest Pro |
-| **Engine** | Unity 2022.3 LTS |
-| **Tracking** | Meta Movement SDK (84 joints), OVRHand, OVRSkeleton |
-| **Interaction** | OVRGrabber, Fixed Joint, Configurable Joint |
-| **Audio** | Unity Spatial Audio (3D panning, attenuation) |
-| **Rendering** | Shader Graph (emission control) |
-| **Data** | C# StreamWriter → CSV, ScriptableObject |
-
----
-
-## Data Schema
-
-*데이터 스키마*
+C# StreamWriter로 CSV 형식 저장, UTF-8 인코딩, 0.5초 버퍼 플러시 주기로 실시간 데이터 손실을 방지합니다.
 
 ```csv
-Timestamp,EventType,Position_X,Position_Y,Position_Z,RiskLevel,ResponseTime_ms
+Timestamp,EventType,Position_X,Position_Y,Position_Z,RiskLevel,ResponseTime
 1704067200000,HAND_BELOW_HIP,0.12,-0.45,0.31,WARNING,null
 1704067201500,FACE_CONTACT,0.08,1.62,0.15,DANGER,820
 1704067205000,NONSTERILE_CONTACT,-0.25,0.80,0.42,DANGER,1150
 ```
 
-**Applications**: Contamination heatmaps · Fatigue-correlated trends · Training progress tracking
+Unity 정적 변수로 세션 전반의 누적 오염 횟수, 경고 빈도, 반응 시간 통계를 관리하며, ScriptableObject로 사용자별 설정값과 임계값 프로파일을 영속 저장합니다.
 
-*활용: 오염 히트맵 · 피로도 상관분석 · 훈련 진척도 추적*
-
----
-
-## Roadmap
-
-| Phase | Goals |
-|:---|:---|
-| **v1.0** | Core detection + feedback system ✅ |
-| **v1.1** | Cloud dashboard, multi-user mode |
-| **v2.0** | Inside-Out tracking for physical OR environments |
-| **v3.0** | CV-based automatic non-sterile zone labeling |
+**Analysis applications:**
+- Spatial patterns: Contamination-prone zone heatmaps
+- Time-series: Fatigue-correlated contamination frequency
+- Learning effect: Response time trends across training sessions
 
 ---
 
-## Market Context
+## Tech Stack
 
-MR healthcare market: **$1.27B (2024) → $67.45B (2034)** — CAGR 48.74%
-
-*MR 헬스케어 시장: 연평균 48.74% 성장 전망*
-
-| Institution | Application |
+| Category | Technology |
 |:---|:---|
-| Providence Swedish Hospital | 100+ neurosurgery cases with HoloLens 2 |
-| NUH Singapore | MR in 100+ surgeries across 8-9 specialties |
+| Platform | Meta Quest 3 / Quest Pro |
+| Engine | Unity 2022.3 LTS |
+| Body Tracking | Meta Movement SDK (84 joints) |
+| Hand Tracking | OVRHand, OVRSkeleton |
+| Interaction | OVRGrabber, OVRGrabbable, Fixed/Configurable Joint |
+| Audio | Unity Spatial Audio (3D panning, attenuation) |
+| Rendering | Shader Graph (emission control) |
+| Data | C# StreamWriter (CSV), ScriptableObject |
 
 ---
 
 ## References
 
-1. Rutala et al. (2023). *Risk of disease transmission from contaminated surgical instruments*. AJIC
-2. Sánchez-Margallo et al. (2021). *Application of mixed reality in medical training*. Frontiers in VR
-3. Yu et al. (2021). *Clean-AR: Using AR for reducing contamination risk*. CDBME
-4. Meta Platforms (2024). *Body Tracking for Movement SDK*. Meta Developers
+- Rutala et al. (2023). *Risk of disease transmission from contaminated surgical instruments*. AJIC
+- Sánchez-Margallo et al. (2021). *Application of mixed reality in medical training*. Frontiers in VR
+- Yu et al. (2021). *Clean-AR: Using AR for reducing contamination risk*. CDBME
+- Meta Platforms (2024). *Body Tracking for Movement SDK*
