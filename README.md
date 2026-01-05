@@ -8,6 +8,20 @@ MR 바디 트래킹 기반 수술실 오염 감지 시스템
 
 ---
 
+## Project Info
+
+서울대학교 기반 XR 연합동아리 **XREAL**의 2024 후반기 리뎁디(Research-Design-Dev) 세션 프로젝트입니다.
+
+| Role | Members |
+|:---|:---:|
+| Development | 4 |
+| Design | 4 |
+| Research | 3 |
+
+**Presentation:** XMC 2024 Conference 실시간 시연 및 발표
+
+---
+
 ## Overview
 
 Minor contamination behaviors in the operating room—hands dropping below the waist, unconsciously touching the face, brushing against non-sterile surfaces—can compromise patient safety. These actions often go unnoticed during high-focus surgical procedures.
